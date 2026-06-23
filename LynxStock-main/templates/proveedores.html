@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Proveedores</h2>
+<button class="btn btn-primary mb-3" onclick="mostrarFormularioProveedor()">Nuevo Proveedor</button>
+<table class="table table-bordered" id="tablaProveedores">
+    <thead><tr><th>Nombre</th><th>RIF</th><th>Teléfono</th><th>Acciones</th></tr></thead>
+    <tbody></tbody>
+</table>
+
+<!-- Modal -->
+<div class="modal fade" id="modalProveedor" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Proveedor</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="provId">
+                <div class="mb-3">
+                    <label class="form-label">Nombre</label>
+                    <input type="text" class="form-control" id="provNombre">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">RIF</label>
+                    <input type="text" class="form-control" id="provRif">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Teléfono</label>
+                    <input type="text" class="form-control" id="provTelefono">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="guardarProveedor()">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+    let modalProv = new bootstrap.Modal(document.getElementById('modalProveedor'));
+    async function cargarProveedores() {
+        const res = await fetch('/api/proveedores');
+        const datos = await res.json();
+        let filas = '';
+        datos.forEach(p => {
+            filas += `<tr>
+                <td>${p.nombre}</td><td>${p.rif || ''}</td><td>${p.telefono || ''}</td>
+                <td>
+                    <button class="btn btn-sm btn-warning" onclick="editarProveedor(${p.id})">✏️</button>
+                    <button class="btn btn-sm btn-danger" onclick="eliminarProveedor(${p.id})">🗑️</button>
+                </td>
+            </tr>`;
+        });
+        document.querySelector('#tablaProveedores tbody').innerHTML = filas;
+    }
+    function mostrarFormularioProveedor() {
+        document.getElementById('provId').value = '';
+        document.getElementById('provNombre').value = '';
+        document.getElementById('provRif').value = '';
+        document.getElementById('provTelefono').value = '';
+        modalProv.show();
+    }
+    async function editarProveedor(id) {
+        const res = await fetch('/api/proveedores');
+        const datos = await res.json();
+        const prov = datos.find(p => p.id === id);
+        if (prov) {
+            document.getElementById('provId').value = prov.id;
+            document.getElementById('provNombre').value = prov.nombre;
+            document.getElementById('provRif').value = prov.rif || '';
+            document.getElementById('provTelefono').value = prov.telefono || '';
+            modalProv.show();
+        }
+    }
+    async function guardarProveedor() {
+        const id = document.getElementById('provId').value;
+        const data = {
+            nombre: document.getElementById('provNombre').value,
+            rif: document.getElementById('provRif').value,
+            telefono: document.getElementById('provTelefono').value
+        };
+        if (id) {
+            await fetch(`/api/proveedores/${id}`, {
+                method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)
+            });
+        } else {
+            await fetch('/api/proveedores', {
+                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)
+            });
+        }
+        modalProv.hide();
+        cargarProveedores();
+    }
+    async function eliminarProveedor(id) {
+        if (await confirmarAccion('¿Eliminar este proveedor?')) {
+            await fetch(`/api/proveedores/${id}`, { method: 'DELETE' });
+            cargarProveedores();
+        }
+    }
+    cargarProveedores();
+</script>
+{% endblock %}

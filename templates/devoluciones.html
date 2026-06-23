@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Devoluciones</h2>
+
+<div class="row">
+    <!-- Panel izquierdo: Búsqueda de venta -->
+    <div class="col-md-6">
+        <h5>Buscar Venta</h5>
+        <ul class="nav nav-tabs mb-3" id="tabBusqueda" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="por-id-tab" data-bs-toggle="tab" data-bs-target="#porId" type="button" role="tab">Por Número</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="por-cedula-tab" data-bs-toggle="tab" data-bs-target="#porCedula" type="button" role="tab">Por Cédula</button>
+            </li>
+        </ul>
+        <div class="tab-content">
+            <!-- Búsqueda por ID -->
+            <div class="tab-pane fade show active" id="porId">
+                <div class="input-group mb-3">
+                    <input type="number" class="form-control" id="ventaIdBuscar" placeholder="Número de venta">
+                    <button class="btn btn-outline-secondary" onclick="buscarVentaPorId()">Buscar</button>
+                </div>
+            </div>
+            <!-- Búsqueda por cédula -->
+            <div class="tab-pane fade" id="porCedula">
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" id="cedulaBuscar" placeholder="Ej: V12345678">
+                    <button class="btn btn-outline-secondary" onclick="buscarVentasPorCedula()">Buscar</button>
+                </div>
+                <div id="listaVentasCliente" class="list-group" style="max-height: 250px; overflow-y: auto;"></div>
+            </div>
+        </div>
+
+        <!-- Datos de la venta encontrada -->
+        <div id="datosVenta" class="mb-3 mt-3"></div>
+        <div id="productosVenta" class="mb-3"></div>
+        <div id="formDevolucion" style="display:none;">
+            <div class="mb-3">
+                <label class="form-label">Observaciones</label>
+                <input type="text" class="form-control" id="observacionesDev">
+            </div>
+            <button class="btn btn-danger" onclick="procesarDevolucion()">Registrar Devolución</button>
+        </div>
+    </div>
+
+    <!-- Panel derecho: Devoluciones de hoy -->
+    <div class="col-md-6">
+        <h5>Devoluciones de Hoy</h5>
+        <table class="table table-bordered" id="tablaDevolucionesHoy">
+            <thead><tr><th>Hora</th><th>Cliente</th><th>Productos</th><th>Total USD</th><th>Total Bs</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let ventaActual = null;
+    let productosSeleccionados = [];
+
+    // --- Buscar por ID (igual que antes) ---
+    async function buscarVentaPorId() {
+        const id = document.getElementById('ventaIdBuscar').value;
+        if (!id) return;
+        const res = await fetch(`/api/ventas/buscar?id=${id}`);
+        const venta = await res.json();
+        if (res.ok) {
+            cargarVenta(venta);
+        } else {
+            mostrarAlerta(venta.error, 'error');
+        }
+    }
+
+    // --- Buscar por cédula ---
+    async function buscarVentasPorCedula() {
+        const cedula = document.getElementById('cedulaBuscar').value.trim();
+        if (!cedula) return;
+        const res = await fetch(`/api/ventas/por-cliente?cedula=${encodeURIComponent(cedula)}`);
+        const data = await res.json();
+        const div = document.getElementById('listaVentasCliente');
+        if (!res.ok || !data.ventas || data.ventas.length === 0) {
+            div.innerHTML = '<div class="list-group-item text-muted">No se encontraron ventas para esa cédula.</div>';
+            return;
+        }
+        // Mostrar lista de ventas
+        let html = '';
+        data.ventas.forEach(v => {
+            html += `<a href="#" class="list-group-item list-group-item-action" onclick="seleccionarVentaCliente(${v.id})">
+                #${v.id} - ${v.fecha} - ${v.tipo} - Total: $${v.total_usd.toFixed(2)} (${v.estado})
+            </a>`;
+        });
+        div.innerHTML = html;
+    }
+
+    // Al hacer clic en una venta de la lista por cédula, cargarla igual que si fuera por ID
+    async function seleccionarVentaCliente(id) {
+        const res = await fetch(`/api/ventas/buscar?id=${id}`);
+        const venta = await res.json();
+        if (res.ok) {
+            cargarVenta(venta);
+            // Limpiar la lista para evitar confusión (opcional)
+            document.getElementById('listaVentasCliente').innerHTML = '';
+            // Cambiar a la pestaña de búsqueda por ID para mostrar la venta cargada (o dejarlo)
+        } else {
+            mostrarAlerta('Error al cargar la venta', 'error');
+        }
+    }
+
+    // --- Lógica común para mostrar la venta y preparar devolución ---
+    function cargarVenta(venta) {
+        ventaActual = venta;
+        document.getElementById('datosVenta').innerHTML = `
+            <p><strong>Venta #${venta.id}</strong> - ${venta.fecha} - ${venta.cliente} (${venta.tipo})</p>
+            <p>Total: $${venta.total_usd.toFixed(2)} / Bs.${venta.total_bs.toFixed(2)}</p>`;
+        // Tabla de productos devolvibles
+        let html = '<table class="table table-sm"><thead><tr><th>Código</th><th>Descripción</th><th>Vendido</th><th>Precio</th><th>Devolver</th></tr></thead><tbody>';
+        productosSeleccionados = [];
+        venta.productos.forEach(p => {
+            html += `<tr>
+                <td>${p.codigo}</td><td>${p.descripcion}</td><td>${p.cantidad_vendida}</td><td>$${p.precio_unitario.toFixed(2)}</td>
+                <td><input type="number" class="form-control form-control-sm" value="0" min="0" max="${p.cantidad_vendida}" 
+                    onchange="actualizarCantidad(${p.id}, this.value, ${p.cantidad_vendida}, ${p.precio_unitario}, '${p.codigo}', '${p.descripcion.replace(/'/g, "\\'")}')"></td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        document.getElementById('productosVenta').innerHTML = html;
+        document.getElementById('formDevolucion').style.display = 'block';
+    }
+
+    function actualizarCantidad(prodId, valor, max, precio, codigo, descripcion) {
+        const cantidad = parseInt(valor) || 0;
+        const index = productosSeleccionados.findIndex(p => p.id === prodId);
+        if (cantidad > 0 && cantidad <= max) {
+            const item = { id: prodId, codigo, descripcion, cantidad_max: max, precio, cantidad_dev: cantidad };
+            if (index >= 0) {
+                productosSeleccionados[index] = item;
+            } else {
+                productosSeleccionados.push(item);
+            }
+        } else {
+            if (index >= 0) productosSeleccionados.splice(index, 1);
+        }
+    }
+
+    // --- Procesar la devolución (sin cambios) ---
+    async function procesarDevolucion() {
+        if (!ventaActual) return;
+        const productos = productosSeleccionados.filter(p => p.cantidad_dev > 0).map(p => ({ id: p.id, cantidad: p.cantidad_dev }));
+        if (productos.length === 0) {
+            mostrarAlerta('Seleccione al menos un producto y cantidad', 'warning');
+            return;
+        }
+        const data = {
+            venta_id: ventaActual.id,
+            observaciones: document.getElementById('observacionesDev').value,
+            productos: productos
+        };
+        const resp = await fetch('/api/devoluciones', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        const resultado = await resp.json();
+        if (resp.ok) {
+            mostrarAlerta(`Devolución registrada. Monto devuelto: $${resultado.total_usd.toFixed(2)} / Bs.${resultado.total_bs.toFixed(2)}`, 'success');
+            // Limpiar
+            ventaActual = null;
+            document.getElementById('ventaIdBuscar').value = '';
+            document.getElementById('cedulaBuscar').value = '';
+            document.getElementById('listaVentasCliente').innerHTML = '';
+            document.getElementById('datosVenta').innerHTML = '';
+            document.getElementById('productosVenta').innerHTML = '';
+            document.getElementById('formDevolucion').style.display = 'none';
+            productosSeleccionados = [];
+            cargarDevolucionesHoy();
+        } else {
+            mostrarAlerta('Error: ' + resultado.error, 'error');
+        }
+    }
+
+    // --- Cargar devoluciones de hoy (sin cambios) ---
+    async function cargarDevolucionesHoy() {
+        const res = await fetch('/api/devoluciones/hoy');
+        const devoluciones = await res.json();
+        const tbody = document.querySelector('#tablaDevolucionesHoy tbody');
+        tbody.innerHTML = '';
+        devoluciones.forEach(d => {
+            const prodTexto = d.productos.map(p => `${p.cantidad}x ${p.descripcion}`).join(', ');
+            const fila = `<tr>
+                <td>${d.fecha}</td><td>${d.cliente}</td><td>${prodTexto}</td>
+                <td>$${d.total_usd.toFixed(2)}</td><td>Bs.${d.total_bs.toFixed(2)}</td>
+            </tr>`;
+            tbody.insertAdjacentHTML('beforeend', fila);
+        });
+    }
+
+    cargarDevolucionesHoy();
+</script>
+{% endblock %}

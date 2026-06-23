@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Inventario</h2>
+<button class="btn btn-success mb-3" onclick="nuevoProducto()">Nuevo Producto</button>
+<input type="file" id="inputExcel" accept=".xlsx" style="display:none" onchange="importarExcel()">
+<button class="btn btn-info mb-3" onclick="document.getElementById('inputExcel').click()">Importar Excel</button>
+
+<table class="table table-bordered" id="tablaInventario">
+    <thead>
+        <tr>
+            <th>Código</th><th>Descripción</th><th>Proveedor</th><th>Costo</th><th>Precio USD</th><th>Precio Bs</th><th>Stock</th><th>Acciones</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<!-- Modal Producto -->
+<div class="modal fade" id="modalProducto" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Producto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="prodId">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Código</label>
+                        <input type="text" class="form-control" id="prodCodigo">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Descripción</label>
+                        <input type="text" class="form-control" id="prodDescripcion">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Proveedor</label>
+                        <select class="form-select" id="prodProveedor"></select>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Costo</label>
+                        <input type="number" step="0.01" class="form-control" id="prodCosto">
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Precio Venta</label>
+                        <input type="number" step="0.01" class="form-control" id="prodPrecio">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Stock</label>
+                        <input type="number" step="0.01" class="form-control" id="prodStock">
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Stock Mínimo</label>
+                        <input type="number" step="0.01" class="form-control" id="prodStockMin">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Ubicación</label>
+                        <input type="text" class="form-control" id="prodUbicacion">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="guardarProducto()">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+    const modalProd = new bootstrap.Modal(document.getElementById('modalProducto'));
+    async function cargarProductos() {
+        const res = await fetch('/api/productos');
+        const productos = await res.json();
+        const resTasa = await fetch('/api/tasa-bcv');
+        const tasaData = await resTasa.json();
+        const tasa = tasaData.tasa || 1;
+        let filas = '';
+        productos.forEach(p => {
+            let claseStock = p.stock <= p.stock_minimo ? 'text-danger fw-bold' : '';
+            filas += `<tr>
+                <td>${p.codigo}</td>
+                <td>${p.descripcion}</td>
+                <td>${p.proveedor_nombre}</td>
+                <td>${p.costo.toFixed(2)}</td>
+                <td>${p.precio.toFixed(2)}</td>
+                <td>${(p.precio * tasa).toFixed(2)}</td>
+                <td class="${claseStock}">${p.stock}</td>
+                <td>
+                    <button class="btn btn-sm btn-warning" onclick="editarProducto(${p.id})">✏️</button>
+                    <button class="btn btn-sm btn-danger" onclick="eliminarProducto(${p.id})">🗑️</button>
+                </td>
+            </tr>`;
+        });
+        document.querySelector('#tablaInventario tbody').innerHTML = filas;
+    }
+    async function llenarSelectProveedores() {
+        const res = await fetch('/api/proveedores');
+        const proveedores = await res.json();
+        const select = document.getElementById('prodProveedor');
+        select.innerHTML = '<option value="">-- Sin proveedor --</option>';
+        proveedores.forEach(pr => {
+            select.innerHTML += `<option value="${pr.id}">${pr.nombre}</option>`;
+        });
+    }
+    function nuevoProducto() {
+        document.getElementById('prodId').value = '';
+        document.getElementById('prodCodigo').value = '';
+        document.getElementById('prodDescripcion').value = '';
+        document.getElementById('prodProveedor').value = '';
+        document.getElementById('prodCosto').value = 0;
+        document.getElementById('prodPrecio').value = 0;
+        document.getElementById('prodStock').value = 0;
+        document.getElementById('prodStockMin').value = 0;
+        document.getElementById('prodUbicacion').value = '';
+        modalProd.show();
+    }
+    async function editarProducto(id) {
+        const res = await fetch('/api/productos');
+        const productos = await res.json();
+        const prod = productos.find(p => p.id === id);
+        if (prod) {
+            document.getElementById('prodId').value = prod.id;
+            document.getElementById('prodCodigo').value = prod.codigo;
+            document.getElementById('prodDescripcion').value = prod.descripcion;
+            document.getElementById('prodProveedor').value = prod.proveedor_id || '';
+            document.getElementById('prodCosto').value = prod.costo;
+            document.getElementById('prodPrecio').value = prod.precio;
+            document.getElementById('prodStock').value = prod.stock;
+            document.getElementById('prodStockMin').value = prod.stock_minimo;
+            document.getElementById('prodUbicacion').value = prod.ubicacion;
+            modalProd.show();
+        }
+    }
+    async function guardarProducto() {
+        const id = document.getElementById('prodId').value;
+        const data = {
+            codigo: document.getElementById('prodCodigo').value,
+            descripcion: document.getElementById('prodDescripcion').value,
+            proveedor_id: document.getElementById('prodProveedor').value || null,
+            costo: parseFloat(document.getElementById('prodCosto').value) || 0,
+            precio: parseFloat(document.getElementById('prodPrecio').value) || 0,
+            stock: parseFloat(document.getElementById('prodStock').value) || 0,
+            stock_minimo: parseFloat(document.getElementById('prodStockMin').value) || 0,
+            ubicacion: document.getElementById('prodUbicacion').value
+        };
+        if (id) {
+            await fetch(`/api/productos/${id}`, {
+                method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)
+            });
+        } else {
+            await fetch('/api/productos', {
+                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)
+            });
+        }
+        modalProd.hide();
+        cargarProductos();
+    }
+    async function eliminarProducto(id) {
+        if (await confirmarAccion('¿Eliminar este producto?')) {
+            await fetch(`/api/productos/${id}`, { method: 'DELETE' });
+            cargarProductos();
+        }
+    }
+    async function importarExcel() {
+        let archivo = document.getElementById('inputExcel').files[0];
+        if (!archivo) return;
+        let formData = new FormData();
+        formData.append('file', archivo);
+        let resp = await fetch('/api/inventario/importar', { method: 'POST', body: formData });
+        let resultado = await resp.json();
+        if (resp.ok) {
+            mostrarAlerta(resultado.mensaje, 'success');
+        } else {
+            mostrarAlerta(resultado.error || 'Error en la importación', 'error');
+        }
+        cargarProductos();
+    }
+    llenarSelectProveedores();
+    cargarProductos();
+</script>
+{% endblock %}

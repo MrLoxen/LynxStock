@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Clientes</h2>
+<button class="btn btn-primary mb-3" onclick="mostrarFormularioCliente()">Nuevo Cliente</button>
+<table class="table table-bordered" id="tablaClientes">
+    <thead><tr><th>Nombre</th><th>Cédula</th><th>Teléfono</th><th>Saldo Pendiente</th><th>Acciones</th></tr></thead>
+    <tbody></tbody>
+</table>
+
+<div class="modal fade" id="modalCliente" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Cliente</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="cliId">
+                <div class="mb-3"><label>Nombre completo</label><input type="text" class="form-control" id="cliNombre"></div>
+                <div class="mb-3"><label>Cédula</label><input type="text" class="form-control" id="cliCedula"></div>
+                <div class="mb-3"><label>Teléfono</label><input type="text" class="form-control" id="cliTelefono"></div>
+                <p class="text-muted">El saldo pendiente se actualiza automáticamente con las ventas a crédito y abonos.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="guardarCliente()">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+    const modalCli = new bootstrap.Modal(document.getElementById('modalCliente'));
+    async function cargarClientes() {
+        const res = await fetch('/api/clientes');
+        const datos = await res.json();
+        let filas = '';
+        datos.forEach(c => {
+            filas += `<tr>
+                <td>${c.nombre}</td><td>${c.cedula}</td><td>${c.telefono || ''}</td>
+                <td>${c.saldo_pendiente.toFixed(2)}</td>
+                <td>
+                    <button class="btn btn-sm btn-warning" onclick="editarCliente(${c.id})">✏️</button>
+                    <button class="btn btn-sm btn-danger" onclick="eliminarCliente(${c.id})">🗑️</button>
+                </td>
+            </tr>`;
+        });
+        document.querySelector('#tablaClientes tbody').innerHTML = filas;
+    }
+    function mostrarFormularioCliente() {
+        document.getElementById('cliId').value = '';
+        document.getElementById('cliNombre').value = '';
+        document.getElementById('cliCedula').value = '';
+        document.getElementById('cliTelefono').value = '';
+        modalCli.show();
+    }
+    async function editarCliente(id) {
+        const res = await fetch('/api/clientes');
+        const datos = await res.json();
+        const cli = datos.find(c => c.id === id);
+        if (cli) {
+            document.getElementById('cliId').value = cli.id;
+            document.getElementById('cliNombre').value = cli.nombre;
+            document.getElementById('cliCedula').value = cli.cedula;
+            document.getElementById('cliTelefono').value = cli.telefono || '';
+            modalCli.show();
+        }
+    }
+    async function guardarCliente() {
+        const id = document.getElementById('cliId').value;
+        const data = {
+            nombre: document.getElementById('cliNombre').value,
+            cedula: document.getElementById('cliCedula').value,
+            telefono: document.getElementById('cliTelefono').value
+        };
+        if (id) {
+            await fetch(`/api/clientes/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
+        } else {
+            const resp = await fetch('/api/clientes', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
+            if (!resp.ok) {
+                const error = await resp.json();
+                mostrarAlerta(error.error, 'error');
+                return;
+            }
+        }
+        modalCli.hide();
+        cargarClientes();
+    }
+    async function eliminarCliente(id) {
+        if (await confirmarAccion('¿Eliminar cliente?')) {
+            await fetch(`/api/clientes/${id}`, { method: 'DELETE' });
+            cargarClientes();
+        }
+    }
+    cargarClientes();
+</script>
+{% endblock %}

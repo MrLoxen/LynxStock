@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Historial de Compras</h2>
+<button class="btn btn-success mb-3" id="btnNuevaCompra">Nueva Compra</button>
+
+<table class="table table-bordered" id="tablaCompras">
+    <thead>
+        <tr><th>ID</th><th>Fecha</th><th>Proveedor</th><th>Total USD</th><th>Observaciones</th><th></th></tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<!-- Modal para nueva compra -->
+<div class="modal fade" id="modalCompra" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Registrar Entrada de Mercancía</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Proveedor</label>
+                        <select class="form-select" id="compraProveedor"></select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Observaciones</label>
+                        <input type="text" class="form-control" id="compraObservaciones">
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Tipo de compra</label>
+                        <select class="form-select" id="compraTipo" onchange="cambiarTipoCompra()">
+                            <option value="contado">Contado</option>
+                            <option value="credito">Crédito</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6" id="panelVencimientoCompra" style="display:none;">
+                        <label class="form-label">Fecha de vencimiento</label>
+                        <input type="date" class="form-control" id="compraVencimiento">
+                    </div>
+                </div>
+                <h6>Productos</h6>
+                <div class="mb-3 position-relative">
+                    <input type="text" class="form-control" id="buscarProductoCompra" placeholder="Buscar producto (código o nombre)" autocomplete="off"
+                           onkeyup="buscarSugerenciasCompra()" onkeydown="manejarTeclaCompra(event)">
+                    <div id="sugerenciasCompra" class="list-group position-absolute w-100"
+                         style="max-height: 200px; overflow-y: auto; z-index: 1051; display: none;"></div>
+                </div>
+                <table class="table table-bordered" id="tablaLineasCompra">
+                    <thead><tr><th>Código</th><th>Descripción</th><th>Cantidad</th><th>Costo USD</th><th>Subtotal</th><th></th></tr></thead>
+                    <tbody></tbody>
+                </table>
+                <h5>Total: $<span id="totalCompra">0.00</span></h5>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="guardarCompra()">Registrar Compra</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para ver detalle de compra -->
+<div class="modal fade" id="modalDetalle" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Detalle de Compra</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body" id="detalleCompraBody"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Variables globales
+    let modalCompra;
+    let modalDetalle;
+    let lineasCompra = [];
+
+    // Inicializar cuando el DOM esté listo
+    document.addEventListener('DOMContentLoaded', function() {
+        try {
+            modalCompra = new bootstrap.Modal(document.getElementById('modalCompra'));
+            modalDetalle = new bootstrap.Modal(document.getElementById('modalDetalle'));
+        } catch (error) {
+            mostrarAlerta('Error al cargar los modales: ' + error.message, 'error');
+        }
+
+        // Asignar evento al botón "Nueva Compra"
+        document.getElementById('btnNuevaCompra').addEventListener('click', nuevaCompra);
+
+        // Cargar historial de compras
+        cargarCompras();
+    });
+
+    // --- Funciones principales ---
+    async function cargarCompras() {
+        try {
+            const res = await fetch('/api/compras');
+            const compras = await res.json();
+            let filas = '';
+            compras.forEach(c => {
+                filas += `<tr>
+                    <td>${c.id}</td><td>${c.fecha}</td><td>${c.proveedor}</td><td>$${c.total.toFixed(2)}</td>
+                    <td>${c.observaciones || ''}</td>
+                    <td><button class="btn btn-sm btn-info" onclick="verDetalle(${c.id})">Ver</button></td>
+                </tr>`;
+            });
+            document.querySelector('#tablaCompras tbody').innerHTML = filas;
+        } catch (error) {
+            mostrarAlerta('Error al cargar compras: ' + error.message, 'error');
+        }
+    }
+
+    async function llenarSelectProveedores() {
+        try {
+            const res = await fetch('/api/proveedores');
+            const provs = await res.json();
+            const select = document.getElementById('compraProveedor');
+            select.innerHTML = '<option value="">-- Seleccione --</option>';
+            provs.forEach(p => { select.innerHTML += `<option value="${p.id}">${p.nombre}</option>`; });
+        } catch (error) {
+            mostrarAlerta('Error al cargar proveedores: ' + error.message, 'error');
+        }
+    }
+
+    async function nuevaCompra() {
+        try {
+            lineasCompra = [];
+            document.getElementById('compraProveedor').value = '';
+            document.getElementById('compraObservaciones').value = '';
+            document.getElementById('compraTipo').value = 'contado';
+            document.getElementById('panelVencimientoCompra').style.display = 'none';
+            document.getElementById('totalCompra').textContent = '0.00';
+            document.querySelector('#tablaLineasCompra tbody').innerHTML = '';
+            await llenarSelectProveedores();
+            modalCompra.show();
+        } catch (error) {
+            mostrarAlerta('Error al abrir el formulario de compra: ' + error.message, 'error');
+        }
+    }
+
+    function cambiarTipoCompra() {
+        const tipo = document.getElementById('compraTipo').value;
+        document.getElementById('panelVencimientoCompra').style.display = tipo === 'credito' ? 'block' : 'none';
+    }
+
+    // --- Autocompletado ---
+    let timeoutBusquedaCompra = null;
+    async function buscarSugerenciasCompra() {
+        clearTimeout(timeoutBusquedaCompra);
+        let q = document.getElementById('buscarProductoCompra').value.trim();
+        if (!q) {
+            document.getElementById('sugerenciasCompra').style.display = 'none';
+            return;
+        }
+        timeoutBusquedaCompra = setTimeout(async () => {
+            try {
+                const res = await fetch(`/api/productos/buscar?q=${encodeURIComponent(q)}`);
+                const productos = await res.json();
+                mostrarSugerenciasCompra(productos);
+            } catch (error) {
+                console.error(error);
+            }
+        }, 300);
+    }
+
+    function mostrarSugerenciasCompra(productos) {
+        const div = document.getElementById('sugerenciasCompra');
+        if (productos.length === 0) {
+            div.style.display = 'none';
+            return;
+        }
+        let html = '';
+        productos.forEach(p => {
+            html += `<a href="#" class="list-group-item list-group-item-action" 
+                        onclick="seleccionarProductoCompra(${p.id}, '${p.codigo}', '${p.descripcion.replace(/'/g, "\\'")}', ${p.precio}); return false;">
+                        ${p.codigo} - ${p.descripcion} (Costo: $${p.precio.toFixed(2)})</a>`;
+        });
+        div.innerHTML = html;
+        div.style.display = 'block';
+    }
+
+    function seleccionarProductoCompra(id, codigo, descripcion, costo) {
+        if (lineasCompra.find(l => l.id === id)) {
+            mostrarAlerta('El producto ya está en la lista', 'warning');
+            return;
+        }
+        lineasCompra.push({ id: id, codigo: codigo, descripcion: descripcion, cantidad: 1, costo_unitario: costo });
+        document.getElementById('buscarProductoCompra').value = '';
+        document.getElementById('sugerenciasCompra').style.display = 'none';
+        renderizarLineas();
+    }
+
+    function manejarTeclaCompra(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const div = document.getElementById('sugerenciasCompra');
+            if (div.style.display === 'block') {
+                const primerLink = div.querySelector('a');
+                if (primerLink) primerLink.click();
+                return;
+            }
+            let texto = document.getElementById('buscarProductoCompra').value.trim();
+            if (texto) {
+                fetch(`/api/productos/buscar?q=${encodeURIComponent(texto)}`)
+                .then(res => res.json())
+                .then(productos => {
+                    if (productos.length === 1) {
+                        seleccionarProductoCompra(productos[0].id, productos[0].codigo, productos[0].descripcion, productos[0].precio);
+                    } else if (productos.length > 1) {
+                        mostrarSugerenciasCompra(productos);
+                    } else {
+                        mostrarAlerta('Producto no encontrado', 'warning');
+                    }
+                });
+            }
+        }
+        if (e.key === 'Escape') {
+            document.getElementById('sugerenciasCompra').style.display = 'none';
+        }
+    }
+
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('#buscarProductoCompra') && !e.target.closest('#sugerenciasCompra')) {
+            document.getElementById('sugerenciasCompra').style.display = 'none';
+        }
+    });
+
+    // --- Líneas de compra ---
+    function renderizarLineas() {
+        const tbody = document.querySelector('#tablaLineasCompra tbody');
+        tbody.innerHTML = '';
+        let total = 0;
+        lineasCompra.forEach((item, index) => {
+            const subtotal = item.cantidad * item.costo_unitario;
+            total += subtotal;
+            tbody.innerHTML += `<tr>
+                <td>${item.codigo}</td><td>${item.descripcion}</td>
+                <td><input type="number" value="${item.cantidad}" min="1" onchange="lineasCompra[${index}].cantidad = parseFloat(this.value) || 1; renderizarLineas()"></td>
+                <td><input type="number" step="0.01" value="${item.costo_unitario}" onchange="lineasCompra[${index}].costo_unitario = parseFloat(this.value) || 0; renderizarLineas()"></td>
+                <td>$${subtotal.toFixed(2)}</td>
+                <td><button class="btn btn-sm btn-danger" onclick="lineasCompra.splice(${index},1); renderizarLineas()">X</button></td>
+            </tr>`;
+        });
+        document.getElementById('totalCompra').textContent = total.toFixed(2);
+    }
+
+    async function guardarCompra() {
+        try {
+            const proveedor_id = document.getElementById('compraProveedor').value;
+            if (!proveedor_id) { mostrarAlerta('Seleccione un proveedor', 'warning'); return; }
+            if (lineasCompra.length === 0) { mostrarAlerta('Agregue al menos un producto', 'warning'); return; }
+            const data = {
+                proveedor_id: proveedor_id,
+                tipo: document.getElementById('compraTipo').value,
+                fecha_vencimiento: document.getElementById('compraVencimiento').value || null,
+                observaciones: document.getElementById('compraObservaciones').value,
+                productos: lineasCompra.map(l => ({ id: l.id, cantidad: l.cantidad, costo_unitario: l.costo_unitario }))
+            };
+            const resp = await fetch('/api/compras', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
+            const resultado = await resp.json();
+            if (resp.ok) { 
+                mostrarAlerta('Compra registrada', 'success'); 
+                modalCompra.hide(); 
+                cargarCompras(); 
+            } else { 
+                mostrarAlerta('Error: ' + resultado.error, 'error'); 
+            }
+        } catch (error) {
+            mostrarAlerta('Error al registrar la compra: ' + error.message, 'error');
+        }
+    }
+
+    async function verDetalle(id) {
+        try {
+            const res = await fetch(`/api/compras/${id}`);
+            const compra = await res.json();
+            let html = `<p><strong>Fecha:</strong> ${compra.fecha} | <strong>Proveedor:</strong> ${compra.proveedor} | <strong>Total:</strong> $${compra.total.toFixed(2)}</p>
+                        <p>${compra.observaciones || ''}</p>
+                        <table class="table table-sm"><thead><tr><th>Código</th><th>Producto</th><th>Cant.</th><th>Costo Unit.</th><th>Subtotal</th></tr></thead><tbody>`;
+            compra.detalles.forEach(d => { html += `<tr><td>${d.codigo}</td><td>${d.producto}</td><td>${d.cantidad}</td><td>$${d.costo_unitario.toFixed(2)}</td><td>$${d.subtotal.toFixed(2)}</td></tr>`; });
+            html += `</tbody></table>`;
+            document.getElementById('detalleCompraBody').innerHTML = html;
+            modalDetalle.show();
+        } catch (error) {
+            mostrarAlerta('Error al ver detalle: ' + error.message, 'error');
+        }
+    }
+</script>
+{% endblock %}

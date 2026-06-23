@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Gestión de Clientes</h2>
+<p class="text-muted">Administra el registro general de clientes, saldos pendientes y datos fiscales obligatorios.</p>
+
+<button class="btn btn-primary mb-4" onclick="abrirModalCliente()">+ Nuevo Cliente</button>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <table class="table table-hover align-middle" id="tablaClientes">
+            <thead class="table-dark">
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Cédula / RIF</th>
+                    <th>Teléfono</th>
+                    <th>Dirección Fiscal</th>
+                    <th>Saldo Pendiente</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="modalCliente" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalClienteTitle">Registrar Cliente</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="clienteId">
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Nombre Completo <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="cliNombre" autocomplete="off" required>
+                </div>
+                
+                <div class="mb-3" id="divCedula">
+                    <label class="form-label fw-bold">Cédula / RIF <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="cliCedula" autocomplete="off" required>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Teléfono <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="cliTelefono" autocomplete="off" required>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Dirección Fiscal <span class="text-danger">*</span></label>
+                    <textarea class="form-control" id="cliDireccion" rows="3" placeholder="Ej: Av. Las Delicias, CC. Blue, Local 5, Maracay..." required></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="guardarCliente()">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const modalCli = new bootstrap.Modal(document.getElementById('modalCliente'));
+    let clientesLista = [];
+    let editando = false;
+
+    // --- Cargar clientes en la tabla ---
+    async function cargarClientes() {
+        const res = await fetch('/api/clientes');
+        if (res.ok) {
+            clientesLista = await res.json();
+            let html = '';
+            clientesLista.forEach((c, index) => {
+                // Si no tiene dirección asignada, mostramos una advertencia legal en rojo
+                const dirTexto = c.direccion 
+                    ? c.direccion 
+                    : '<span class="text-danger fst-italic">⚠️ Sin dirección fiscal registrada</span>';
+                
+                html += `<tr>
+                    <td>${c.id}</td>
+                    <td class="fw-bold">${c.nombre}</td>
+                    <td>${c.cedula}</td>
+                    <td>${c.telefono || '<span class="text-muted fst-italic">No asignado</span>'}</td>
+                    <td style="max-width: 250px;" class="text-truncate" title="${c.direccion || ''}">${dirTexto}</td>
+                    <td class="fw-bold text-danger">Bs.${c.saldo_pendiente.toFixed(2)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-warning text-dark me-1" onclick="abrirEditar(${index})">✏️ Editar</button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="eliminarCliente(${c.id}, '${c.nombre.replace(/'/g, "\\'")}')">🗑️ Eliminar</button>
+                    </td>
+                </tr>`;
+            });
+            document.querySelector('#tablaClientes tbody').innerHTML = html;
+        }
+    }
+
+    // --- Abrir modal para nuevo cliente ---
+    function abrirModalCliente() {
+        editando = false;
+        document.getElementById('modalClienteTitle').textContent = 'Registrar Cliente';
+        document.getElementById('clienteId').value = '';
+        document.getElementById('cliNombre').value = '';
+        document.getElementById('cliCedula').value = '';
+        document.getElementById('divCedula').style.display = 'block'; // Permitir escribir cédula
+        document.getElementById('cliTelefono').value = '';
+        document.getElementById('cliDireccion').value = '';
+        modalCli.show();
+    }
+
+    // --- Abrir modal para editar cliente existente ---
+    function abrirEditar(index) {
+        editando = true;
+        const c = clientesLista[index];
+        document.getElementById('modalClienteTitle').textContent = 'Editar Datos de Cliente';
+        document.getElementById('clienteId').value = c.id;
+        document.getElementById('cliNombre').value = c.nombre;
+        document.getElementById('cliCedula').value = c.cedula;
+        document.getElementById('divCedula').style.display = 'none'; // Por seguridad no dejamos cambiar la cédula/RIF
+        document.getElementById('cliTelefono').value = c.telefono || '';
+        document.getElementById('cliDireccion').value = c.direccion || '';
+        modalCli.show();
+    }
+
+    // --- Guardar (POST o PUT) ---
+    async function guardarCliente() {
+        const id = document.getElementById('clienteId').value;
+        const data = {
+            nombre: document.getElementById('cliNombre').value.trim(),
+            telefono: document.getElementById('cliTelefono').value.trim(),
+            direccion: document.getElementById('cliDireccion').value.trim()
+        };
+
+        if (!data.nombre || !data.direccion || !data.telefono) {
+            mostrarAlerta('El nombre, el teléfono y la dirección fiscal son completamente obligatorios.', 'warning');
+            return;
+        }
+
+        if (!editando) {
+            data.cedula = document.getElementById('cliCedula').value.trim();
+            if (!data.cedula) {
+                mostrarAlerta('La cédula o RIF es obligatoria para nuevos registros.', 'warning');
+                return;
+            }
+        }
+
+        const url = editando ? `/api/clientes/${id}` : '/api/clientes';
+        const method = editando ? 'PUT' : 'POST';
+
+        try {
+            const res = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            const resultado = await res.json();
+            if (res.ok) {
+                mostrarAlerta(editando ? '¡Datos actualizados con éxito!' : '¡Cliente registrado con éxito!', 'success');
+                modalCli.hide();
+                cargarClientes();
+            } else {
+                mostrarAlerta(resultado.error || 'No se pudo guardar la información', 'error');
+            }
+        } catch (e) {
+            mostrarAlerta('Error de conexión con el servidor backend', 'error');
+        }
+    }
+
+    // --- Eliminar cliente ---
+    async function eliminarCliente(id, nombre) {
+        const confirmado = await confirmarAccion(`¿Está completamente seguro de que desea eliminar al cliente "${nombre}" de la base de datos?`);
+        if (confirmado) {
+            try {
+                const res = await fetch(`/api/clientes/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    mostrarAlerta('Cliente removido del sistema.', 'success');
+                    cargarClientes();
+                } else {
+                    const resultado = await res.json();
+                    mostrarAlerta(resultado.error || 'Error al eliminar cliente', 'error');
+                }
+            } catch (e) {
+                mostrarAlerta('Error de conexión al intentar eliminar', 'error');
+            }
+        }
+    }
+
+    // Arrancar la tabla al cargar la vista
+    cargarClientes();
+</script>
+{% endblock %}

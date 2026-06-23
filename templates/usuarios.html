@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Gestión de Usuarios</h2>
+<p class="text-muted">Administra los accesos de tu equipo. Solo los administradores pueden ver esta pantalla.</p>
+
+<div id="datosServidor" data-user-id="{{ current_user.id }}" style="display: none;"></div>
+
+<button class="btn btn-primary mb-4" onclick="abrirModalUsuario()">+ Nuevo Usuario</button>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <table class="table table-hover align-middle" id="tablaUsuarios">
+            <thead class="table-dark">
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre de Usuario</th>
+                    <th>Rol en el Sistema</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="modalUsuario" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">Registrar Nuevo Usuario</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Usuario (Ej: juan.perez)</label>
+                    <input type="text" class="form-control" id="nuevoUsername" autocomplete="off">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Contraseña</label>
+                    <input type="password" class="form-control" id="nuevoPassword">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Nivel de Acceso</label>
+                    <select class="form-select" id="nuevoRol">
+                        <option value="cajero">Cajero (Solo Caja y Clientes)</option>
+                        <option value="gerente">Gerente (Inventario, Compras, Reportes)</option>
+                        <option value="admin">Administrador (Acceso Total)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="guardarUsuario()">Crear Usuario</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Inicializar el modal
+    const modalUser = new bootstrap.Modal(document.getElementById('modalUsuario'));
+
+    // Leemos el ID desde el atributo HTML
+    const currentUserId = parseInt(document.getElementById('datosServidor').getAttribute('data-user-id'));
+
+    async function cargarUsuarios() {
+        const res = await fetch('/api/usuarios');
+        if (res.ok) {
+            const usuarios = await res.json();
+            let html = '';
+            usuarios.forEach(u => {
+                let badgeColor = u.rol === 'admin' ? 'danger' : (u.rol === 'gerente' ? 'warning text-dark' : 'info text-dark');
+                html += `<tr>
+                    <td>${u.id}</td>
+                    <td class="fw-bold">${u.username}</td>
+                    <td><span class="badge bg-${badgeColor} px-3 py-2">${u.rol.toUpperCase()}</span></td>
+                    <td>
+                        ${currentUserId !== u.id ? 
+                          `<button class="btn btn-sm btn-outline-danger" onclick="eliminarUsuario(${u.id}, '${u.username}')">🗑️ Eliminar</button>` 
+                          : '<span class="text-muted fst-italic">Tu sesión actual</span>'}
+                    </td>
+                </tr>`;
+            });
+            document.querySelector('#tablaUsuarios tbody').innerHTML = html;
+        }
+    }
+
+    function abrirModalUsuario() {
+        document.getElementById('nuevoUsername').value = '';
+        document.getElementById('nuevoPassword').value = '';
+        document.getElementById('nuevoRol').value = 'cajero';
+        modalUser.show();
+    }
+
+    async function guardarUsuario() {
+        const username = document.getElementById('nuevoUsername').value.trim();
+        const password = document.getElementById('nuevoPassword').value;
+        const rol = document.getElementById('nuevoRol').value;
+
+        if (!username || !password) {
+            mostrarAlerta('Debes ingresar un usuario y una contraseña', 'warning');
+            return;
+        }
+
+        const res = await fetch('/api/usuarios', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({username, password, rol})
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+            mostrarAlerta('¡Usuario creado con éxito!', 'success');
+            modalUser.hide();
+            cargarUsuarios();
+        } else {
+            mostrarAlerta(data.error, 'error');
+        }
+    }
+
+    async function eliminarUsuario(id, username) {
+        const confirmado = await confirmarAccion(`¿Estás 100% seguro de que deseas eliminar al usuario "${username}"? No podrá volver a entrar al sistema.`);
+        if (confirmado) {
+            const res = await fetch(`/api/usuarios/${id}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (res.ok) {
+                mostrarAlerta('Usuario eliminado.', 'success');
+                cargarUsuarios();
+            } else {
+                mostrarAlerta(data.error, 'error');
+            }
+        }
+    }
+
+    // Arrancar la tabla
+    cargarUsuarios();
+</script>
+{% endblock %}

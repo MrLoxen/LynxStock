@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Cuentas por Pagar</h2>
+
+<ul class="nav nav-tabs mb-3" id="myTab" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="compras-tab" data-bs-toggle="tab" data-bs-target="#compras" type="button" role="tab">Compras a crédito</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="gastos-tab" data-bs-toggle="tab" data-bs-target="#gastos" type="button" role="tab" onclick="cargarDeudas()">Gastos generales</button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <!-- ========== Pestaña Compras ========== -->
+    <div class="tab-pane fade show active" id="compras">
+        <div class="mb-3">
+            <label class="form-label">Filtrar estado</label>
+            <select class="form-select" id="filtroEstadoCompras" onchange="cargarCreditosCompras()">
+                <option value="pendiente">Pendientes</option>
+                <option value="pagado">Pagados</option>
+                <option value="todos">Todos</option>
+            </select>
+        </div>
+        <table class="table table-bordered" id="tablaCreditosCompra">
+            <thead><tr><th>Proveedor</th><th>Monto Total</th><th>Saldo Restante</th><th>Vencimiento</th><th>Días Rest.</th><th>Estado</th><th>Pagar</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- ========== Pestaña Gastos ========== -->
+    <div class="tab-pane fade" id="gastos">
+        <button class="btn btn-primary mb-3" onclick="nuevaDeuda()">Nuevo gasto</button>
+        <table class="table table-bordered" id="tablaDeudas">
+            <thead><tr><th>Descripción</th><th>Monto Total</th><th>Saldo Restante</th><th>Vencimiento</th><th>Días Rest.</th><th>Estado</th><th>Pagar</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal pago (compras) -->
+<div class="modal fade" id="modalPago" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Registrar Pago</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <input type="hidden" id="creditoCompraId">
+                <div class="mb-3"><label>Monto a pagar</label><input type="number" step="0.01" class="form-control" id="montoPago"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="registrarPago()">Pagar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal nueva deuda -->
+<div class="modal fade" id="modalDeuda" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Nueva deuda general</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="mb-3"><label>Descripción</label><input type="text" class="form-control" id="descDeuda"></div>
+                <div class="row">
+                    <div class="col-md-6 mb-3"><label>Monto total</label><input type="number" step="0.01" class="form-control" id="montoDeuda"></div>
+                    <div class="col-md-6 mb-3"><label>Fecha vencimiento</label><input type="date" class="form-control" id="fechaVencDeuda"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="guardarDeuda()">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pago deuda general -->
+<div class="modal fade" id="modalPagoDeuda" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Registrar Pago</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <input type="hidden" id="deudaIdPagar">
+                <div class="mb-3"><label>Monto</label><input type="number" step="0.01" class="form-control" id="montoPagoDeuda"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="pagarDeuda()">Pagar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const modalPago = new bootstrap.Modal(document.getElementById('modalPago'));
+    const modalDeuda = new bootstrap.Modal(document.getElementById('modalDeuda'));
+    const modalPagoDeuda = new bootstrap.Modal(document.getElementById('modalPagoDeuda'));
+
+    // ===== COMPRAS A CRÉDITO =====
+    async function cargarCreditosCompras() {
+        let estado = document.getElementById('filtroEstadoCompras').value;
+        let res = await fetch(`/api/compras/creditos?estado=${estado}`);
+        let creditos = await res.json();
+        let filas = '';
+        creditos.forEach(c => {
+            let clase = '';
+            if (c.estado === 'pendiente' && c.dias_restantes !== null) {
+                clase = c.dias_restantes < 0 ? 'text-danger fw-bold' : (c.dias_restantes <= 5 ? 'text-warning' : '');
+            }
+            filas += `<tr>
+                <td>${c.proveedor_nombre}</td>
+                <td>$${c.monto_total.toFixed(2)}</td>
+                <td>$${c.saldo_restante.toFixed(2)}</td>
+                <td>${c.fecha_vencimiento}</td>
+                <td class="${clase}">${c.dias_restantes !== null ? c.dias_restantes : ''}</td>
+                <td>${c.estado}</td>
+                <td>${c.estado === 'pendiente' ? `<button class="btn btn-sm btn-success" onclick="abrirPago(${c.id})">Pagar</button>` : ''}</td>
+            </tr>`;
+        });
+        document.querySelector('#tablaCreditosCompra tbody').innerHTML = filas;
+    }
+    function abrirPago(creditoId) {
+        document.getElementById('creditoCompraId').value = creditoId;
+        document.getElementById('montoPago').value = '';
+        modalPago.show();
+    }
+    async function registrarPago() {
+        let id = document.getElementById('creditoCompraId').value;
+        let monto = parseFloat(document.getElementById('montoPago').value);
+        if (!monto || monto <= 0) { mostrarAlerta('Monto inválido', 'warning'); return; }
+        let resp = await fetch(`/api/compras/creditos/${id}/pagar`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({monto: monto})
+        });
+        let resultado = await resp.json();
+        if (resp.ok) {
+            mostrarAlerta('Pago registrado. Saldo restante: ' + resultado.saldo_restante.toFixed(2), 'success');
+            modalPago.hide();
+            cargarCreditosCompras();
+        } else {
+            mostrarAlerta('Error: ' + resultado.error, 'error');
+        }
+    }
+
+    // ===== GASTOS GENERALES =====
+    async function cargarDeudas() {
+        let res = await fetch('/api/deudas');
+        let deudas = await res.json();
+        let filas = '';
+        deudas.forEach(d => {
+            let clase = '';
+            if (d.estado === 'pendiente' && d.dias_restantes !== null) {
+                clase = d.dias_restantes < 0 ? 'text-danger fw-bold' : (d.dias_restantes <= 5 ? 'text-warning' : '');
+            }
+            filas += `<tr>
+                <td>${d.descripcion}</td>
+                <td>$${d.monto_total.toFixed(2)}</td>
+                <td>$${d.saldo_restante.toFixed(2)}</td>
+                <td>${d.fecha_vencimiento}</td>
+                <td class="${clase}">${d.dias_restantes !== null ? d.dias_restantes : ''}</td>
+                <td>${d.estado}</td>
+                <td>${d.estado === 'pendiente' ? `<button class="btn btn-sm btn-success" onclick="abrirPagoDeuda(${d.id})">Pagar</button>` : ''}</td>
+            </tr>`;
+        });
+        document.querySelector('#tablaDeudas tbody').innerHTML = filas;
+    }
+    function nuevaDeuda() {
+        document.getElementById('descDeuda').value = '';
+        document.getElementById('montoDeuda').value = '';
+        document.getElementById('fechaVencDeuda').value = '';
+        modalDeuda.show();
+    }
+    async function guardarDeuda() {
+        let data = {
+            descripcion: document.getElementById('descDeuda').value,
+            monto_total: parseFloat(document.getElementById('montoDeuda').value),
+            fecha_vencimiento: document.getElementById('fechaVencDeuda').value || null
+        };
+        await fetch('/api/deudas', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        modalDeuda.hide();
+        cargarDeudas();
+    }
+    function abrirPagoDeuda(id) {
+        document.getElementById('deudaIdPagar').value = id;
+        document.getElementById('montoPagoDeuda').value = '';
+        modalPagoDeuda.show();
+    }
+    async function pagarDeuda() {
+        let id = document.getElementById('deudaIdPagar').value;
+        let monto = parseFloat(document.getElementById('montoPagoDeuda').value);
+        if (!monto || monto <= 0) { mostrarAlerta('Monto inválido', 'warning'); return; }
+        let resp = await fetch(`/api/deudas/${id}/pagar`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({monto: monto})
+        });
+        let resultado = await resp.json();
+        if (resp.ok) {
+            mostrarAlerta('Pago registrado. Saldo restante: ' + resultado.saldo_restante.toFixed(2), 'success');
+            modalPagoDeuda.hide();
+            cargarDeudas();
+        } else {
+            mostrarAlerta('Error: ' + resultado.error, 'error');
+        }
+    }
+
+    // Inicializar
+    cargarCreditosCompras();
+</script>
+{% endblock %}

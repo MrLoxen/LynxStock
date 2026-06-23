@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Créditos</h2>
+<div class="mb-3">
+    <label class="form-label">Filtrar estado</label>
+    <select class="form-select" id="filtroEstado" onchange="cargarCreditos()">
+        <option value="pendiente">Pendientes</option>
+        <option value="pagado">Pagados</option>
+        <option value="todos">Todos</option>
+    </select>
+</div>
+<table class="table table-bordered" id="tablaCreditos">
+    <thead><tr><th>Cliente</th><th>Monto Total</th><th>Saldo Restante</th><th>Vencimiento</th><th>Días Rest.</th><th>Estado</th><th>Abonar</th></tr></thead>
+    <tbody></tbody>
+</table>
+
+<!-- Modal abono -->
+<div class="modal fade" id="modalAbono" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Registrar Abono</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <input type="hidden" id="creditoIdAbono">
+                <div class="mb-3"><label>Monto a abonar</label><input type="number" step="0.01" class="form-control" id="montoAbono"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="registrarAbono()">Abonar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+    const modalAbono = new bootstrap.Modal(document.getElementById('modalAbono'));
+    async function cargarCreditos() {
+        let estado = document.getElementById('filtroEstado').value;
+        let res = await fetch(`/api/creditos?estado=${estado}`);
+        let creditos = await res.json();
+        let filas = '';
+        creditos.forEach(c => {
+            let clase = '';
+            if (c.estado === 'pendiente' && c.dias_restantes !== null) {
+                clase = c.dias_restantes < 0 ? 'text-danger fw-bold' : (c.dias_restantes <= 5 ? 'text-warning' : '');
+            }
+            filas += `<tr>
+                <td>${c.cliente_nombre}</td>
+                <td>${c.monto_total.toFixed(2)}</td>
+                <td>${c.saldo_restante.toFixed(2)}</td>
+                <td>${c.fecha_vencimiento}</td>
+                <td class="${clase}">${c.dias_restantes !== null ? c.dias_restantes : ''}</td>
+                <td>${c.estado}</td>
+                <td>${c.estado === 'pendiente' ? `<button class="btn btn-sm btn-success" onclick="abrirAbono(${c.id})">Abonar</button>` : ''}</td>
+            </tr>`;
+        });
+        document.querySelector('#tablaCreditos tbody').innerHTML = filas;
+    }
+    function abrirAbono(creditoId) {
+        document.getElementById('creditoIdAbono').value = creditoId;
+        document.getElementById('montoAbono').value = '';
+        modalAbono.show();
+    }
+    async function registrarAbono() {
+        let id = document.getElementById('creditoIdAbono').value;
+        let monto = parseFloat(document.getElementById('montoAbono').value);
+        if (!monto || monto <= 0) {
+            mostrarAlerta('Monto inválido', 'warning');
+            return;
+        }
+        let resp = await fetch(`/api/creditos/${id}/abonar`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({monto: monto})
+        });
+        let resultado = await resp.json();
+        if (resp.ok) {
+            mostrarAlerta('Abono registrado. Saldo restante: ' + resultado.saldo_restante.toFixed(2), 'success');
+            modalAbono.hide();
+            cargarCreditos();
+        } else {
+            mostrarAlerta('Error: ' + resultado.error, 'error');
+        }
+    }
+    cargarCreditos();
+</script>
+{% endblock %}

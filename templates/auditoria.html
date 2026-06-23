@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Registro de Auditoría</h2>
+<p class="text-muted">Bitácora de movimientos del sistema. Acceso exclusivo para administradores.</p>
+
+<div class="row mb-3">
+    <div class="col-md-4">
+        <input type="text" id="buscadorAuditoria" class="form-control" placeholder="Buscar por usuario, módulo o detalle..." onkeyup="filtrarTabla()">
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <div style="max-height: 600px; overflow-y: auto;">
+            <table class="table table-hover table-striped align-middle mb-0" id="tablaAuditoria">
+                <thead class="table-dark" style="position: sticky; top: 0; z-index: 1;">
+                    <tr>
+                        <th>Fecha y Hora</th>
+                        <th>Usuario</th>
+                        <th>Acción</th>
+                        <th>Módulo</th>
+                        <th>Detalles</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function cargarAuditoria() {
+        const res = await fetch('/api/auditoria');
+        if (res.ok) {
+            const registros = await res.json();
+            let html = '';
+            registros.forEach(r => {
+                // Colorear las acciones para lectura rápida
+                let colorAccion = 'secondary';
+                if(r.accion === 'CREAR') colorAccion = 'success';
+                if(r.accion === 'EDITAR' || r.accion === 'LOGIN') colorAccion = 'primary';
+                if(r.accion === 'ELIMINAR' || r.accion === 'DEVOLUCION') colorAccion = 'danger';
+
+                html += `<tr>
+                    <td class="text-muted" style="font-size: 0.9rem;">${r.fecha}</td>
+                    <td class="fw-bold">${r.usuario}</td>
+                    <td><span class="badge bg-${colorAccion}">${r.accion}</span></td>
+                    <td class="text-uppercase" style="font-size: 0.85rem; letter-spacing: 1px;">${r.modulo}</td>
+                    <td>${r.detalles}</td>
+                </tr>`;
+            });
+            document.querySelector('#tablaAuditoria tbody').innerHTML = html;
+        }
+    }
+
+    function filtrarTabla() {
+        let input = document.getElementById("buscadorAuditoria").value.toLowerCase();
+        let filas = document.querySelectorAll("#tablaAuditoria tbody tr");
+        
+        filas.forEach(fila => {
+            let textoFila = fila.textContent.toLowerCase();
+            fila.style.display = textoFila.includes(input) ? "" : "none";
+        });
+    }
+
+    cargarAuditoria();
+</script>
+{% endblock %}

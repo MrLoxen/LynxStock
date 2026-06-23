@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Reporte Diario</h2>
+<p><em id="fechaReporte"></em></p>
+
+<!-- Tarjetas resumen -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <h5 class="card-title">Ventas Hoy</h5>
+                <p class="card-text display-6" id="cantidadVentas">0</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <h5 class="card-title">Total USD</h5>
+                <p class="card-text display-6" id="totalDolares">$0.00</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-warning">
+            <div class="card-body">
+                <h5 class="card-title">Total Bolívares</h5>
+                <p class="card-text display-6" id="totalBolivares">Bs.0.00</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-info">
+            <div class="card-body">
+                <h5 class="card-title">Abonos Hoy</h5>
+                <p class="card-text display-6" id="totalAbonos">Bs.0.00</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Lista de Ventas -->
+<h4>Ventas</h4>
+<table class="table table-bordered" id="tablaVentas">
+    <thead>
+        <tr>
+            <th># Venta</th><th>Hora</th><th>Tipo</th><th>Cliente</th><th>Total USD</th><th>Total Bs</th><th>Tasa BCV</th><th>Productos</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<!-- Lista de Abonos -->
+<h4>Abonos Recibidos</h4>
+<table class="table table-bordered" id="tablaAbonos">
+    <thead>
+        <tr>
+            <th>Hora</th><th>Cliente</th><th>Monto Bs</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function cargarReporte() {
+        const res = await fetch('/api/ventas/hoy');
+        if (!res.ok) {
+            mostrarAlerta('Error al cargar el reporte', 'error');
+            return;
+        }
+        const data = await res.json();
+
+        // Fecha
+        document.getElementById('fechaReporte').textContent = `Fecha: ${data.fecha}`;
+
+        // Resumen
+        document.getElementById('cantidadVentas').textContent = data.resumen.cantidad_ventas;
+        document.getElementById('totalDolares').textContent = `$${data.resumen.total_ventas_usd.toFixed(2)}`;
+        document.getElementById('totalBolivares').textContent = `Bs.${data.resumen.total_ventas_bs.toFixed(2)}`;
+        document.getElementById('totalAbonos').textContent = `Bs.${data.resumen.total_abonos_bs.toFixed(2)}`;
+
+        // Tabla de ventas
+        const tbodyVentas = document.querySelector('#tablaVentas tbody');
+        tbodyVentas.innerHTML = '';
+        if (data.ventas.length === 0) {
+            tbodyVentas.innerHTML = '<tr><td colspan="8" class="text-center">No hay ventas registradas hoy</td></tr>';
+        } else {
+            data.ventas.forEach(v => {
+                const productosTexto = v.productos.map(p => `${p.cantidad}x ${p.descripcion}`).join(', ');
+                const fila = `<tr>
+                    <td>${v.id}</td><td>${v.hora}</td>
+                    <td><span class="badge ${v.tipo === 'contado' ? 'bg-info' : 'bg-warning'}">${v.tipo}</span></td>
+                    <td>${v.cliente || 'Mostrador'}</td>
+                    <td>$${v.total_usd.toFixed(2)}</td>
+                    <td>Bs.${v.total_bs.toFixed(2)}</td>
+                    <td>${v.tasa_bcv.toFixed(2)}</td>
+                    <td>${productosTexto}</td>
+                </tr>`;
+                tbodyVentas.insertAdjacentHTML('beforeend', fila);
+            });
+        }
+
+        // Tabla de abonos
+        const tbodyAbonos = document.querySelector('#tablaAbonos tbody');
+        tbodyAbonos.innerHTML = '';
+        if (data.abonos.length === 0) {
+            tbodyAbonos.innerHTML = '<tr><td colspan="3" class="text-center">No hay abonos hoy</td></tr>';
+        } else {
+            data.abonos.forEach(a => {
+                const fila = `<tr>
+                    <td>${a.hora}</td>
+                    <td>${a.cliente || 'Desconocido'}</td>
+                    <td>Bs.${a.monto.toFixed(2)}</td>
+                </tr>`;
+                tbodyAbonos.insertAdjacentHTML('beforeend', fila);
+            });
+        }
+    }
+
+    cargarReporte();
+</script>
+{% endblock %}

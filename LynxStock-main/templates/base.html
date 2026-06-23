@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lynx Stock</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- ========== SIDEBAR ========== -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <img src="{{ url_for('static', filename='Lynx-logo.png') }}" alt="Lynx">
+            <span class="brand-text">Lynx Stock</span>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="/inventario" class="nav-link">
+                <span>📦</span> <span class="nav-text">Inventario</span>
+                <span id="badgeStockBajo" class="badge-danger-custom" style="display:none;">0</span>
+            </a>
+            <a href="/compras" class="nav-link"><span>🛒</span> <span class="nav-text">Compras</span></a>
+            <a href="/proveedores" class="nav-link"><span>🏭</span> <span class="nav-text">Proveedores</span></a>
+            <a href="/clientes" class="nav-link"><span>👥</span> <span class="nav-text">Clientes</span></a>
+            <a href="/caja" class="nav-link"><span>💰</span> <span class="nav-text">Caja</span></a>
+            <a href="/creditos" class="nav-link"><span>📋</span> <span class="nav-text">Créditos</span></a>
+            <a href="/cuentas-pagar" class="nav-link"><span>💳</span> <span class="nav-text">Cuentas por Pagar</span></a>
+            <div class="sidebar-divider"></div>
+            <a href="/reportes" class="nav-link"><span>📊</span> <span class="nav-text">Reporte Diario</span></a>
+        </nav>
+        <div class="sidebar-footer">
+            <button class="btn-collapse" id="btnToggleSidebar" title="Colapsar menú">☰</button>
+            <a href="/api/inventario/exportar" class="btn btn-sm btn-outline-light w-100 text-truncate">
+                📥 <span class="btn-text">Exportar Inventario</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- ========== BOTÓN DE CIERRE FLOTANTE ========== -->
+    <button class="btn-cerrar" onclick="cerrarAplicacion()" title="Cerrar aplicación">✕</button>
+
+    <!-- Botón minimizar -->
+    <button class="btn-cerrar" style="bottom: 70px; right: 25px; background-color: rgba(0, 0, 0, 0.7);" onclick="minimizarApp()" title="Minimizar">-</button>
+
+    <!-- ========== CONTENIDO PRINCIPAL ========== -->
+    <div class="main-content">
+        <div class="content-area">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+    <!-- Modal genérico para mensajes -->
+    <div class="modal fade" id="modalMensaje" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header" id="modalMensajeHeader">
+                    <h5 class="modal-title"></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body" id="modalMensajeBody"></div>
+                <div class="modal-footer" id="modalMensajeFooter"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+    {% block scripts %}{% endblock %}
+    <script>
+        // --- Sidebar Toggle ---
+        const sidebar = document.getElementById('sidebar');
+        const btnToggle = document.getElementById('btnToggleSidebar');
+
+        btnToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('collapsed');
+        });
+
+        // --- Stock bajo badge ---
+        async function actualizarBadgeStock() {
+            try {
+                const res = await fetch('/api/productos/stock-bajo');
+                const data = await res.json();
+                const badge = document.getElementById('badgeStockBajo');
+                if (data.count > 0) {
+                    badge.textContent = data.count;
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            } catch (e) {}
+        }
+        actualizarBadgeStock();
+
+        // --- Funciones de mensajes modales ---
+        function mostrarAlerta(mensaje, tipo = 'info') {
+            const header = document.getElementById('modalMensajeHeader');
+            const body = document.getElementById('modalMensajeBody');
+            const footer = document.getElementById('modalMensajeFooter');
+
+            const colores = {
+                success: 'bg-success text-white',
+                error: 'bg-danger text-white',
+                warning: 'bg-warning text-dark',
+                info: 'bg-primary text-white'
+            };
+            header.className = `modal-header ${colores[tipo] || colores.info}`;
+            header.querySelector('.modal-title').textContent = tipo.charAt(0).toUpperCase() + tipo.slice(1);
+            body.textContent = mensaje;
+            footer.innerHTML = '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Aceptar</button>';
+
+            const modal = new bootstrap.Modal(document.getElementById('modalMensaje'));
+            modal.show();
+        }
+
+        function confirmarAccion(mensaje, titulo = 'Confirmar') {
+            return new Promise((resolve) => {
+                const header = document.getElementById('modalMensajeHeader');
+                const body = document.getElementById('modalMensajeBody');
+                const footer = document.getElementById('modalMensajeFooter');
+
+                header.className = 'modal-header bg-warning text-dark';
+                header.querySelector('.modal-title').textContent = titulo;
+                body.textContent = mensaje;
+                footer.innerHTML = `
+                    <button type="button" class="btn btn-secondary" id="btnConfirmarNo">No</button>
+                    <button type="button" class="btn btn-primary" id="btnConfirmarSi">Sí</button>
+                `;
+
+                const modal = new bootstrap.Modal(document.getElementById('modalMensaje'));
+                modal.show();
+
+                document.getElementById('btnConfirmarSi').onclick = () => { modal.hide(); resolve(true); };
+                document.getElementById('btnConfirmarNo').onclick = () => { modal.hide(); resolve(false); };
+            });
+        }
+
+        async function cerrarAplicacion() {
+            const confirmado = await confirmarAccion('¿Está seguro de que desea cerrar la aplicación?', 'Cerrar sistema');
+            if (confirmado) {
+                try {
+                    await fetch('/api/shutdown', { method: 'POST' });
+                } catch (e) { }
+                window.close();
+            }
+        }
+
+        async function minimizarApp() {
+            try {
+                await fetch('/api/minimize', { method: 'POST' });
+            } catch (e) {
+                console.error('Error al minimizar:', e);
+            }
+        }
+    </script>
+</body>
+</html>

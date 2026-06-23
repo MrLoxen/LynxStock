@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Lynx Stock</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='lynx.ico') }}">
+    <style>
+        body {
+            background-color: #1a1b2f; /* El mismo tono de tu barra lateral */
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-family: 'Segoe UI', sans-serif;
+        }
+        .login-card {
+            background-color: #262942;
+            padding: 2.5rem;
+            border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.6);
+            width: 100%;
+            max-width: 400px;
+        }
+        .login-card img {
+            width: 90px;
+            margin-bottom: 1rem;
+        }
+        .form-control {
+            background-color: #1a1b2f;
+            border: 1px solid #3a3d5c;
+            color: white;
+        }
+        .form-control:focus {
+            background-color: #1a1b2f;
+            color: white;
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+        }
+        .btn-login {
+            background-color: #0d6efd;
+            color: white;
+            width: 100%;
+            padding: 0.7rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 6px;
+            margin-top: 1rem;
+            transition: background-color 0.3s;
+        }
+        .btn-login:hover {
+            background-color: #0b5ed7;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="login-card text-center">
+        <img src="{{ url_for('static', filename='Lynx-logo.png') }}" alt="Lynx Logo">
+        <h3 class="mb-4 fw-bold">Lynx Stock</h3>
+        
+        <div id="alertaError" class="alert alert-danger" style="display: none; font-size: 0.9rem;"></div>
+
+        <form id="formLogin" onsubmit="iniciarSesion(event)">
+            <div class="mb-3 text-start">
+                <label class="form-label text-white fw-bold">Usuario</label>
+                <input type="text" class="form-control" id="username" required autocomplete="off">
+            </div>
+            <div class="mb-4 text-start">
+                <label class="form-label text-white fw-bold">Contraseña</label>
+                <input type="password" class="form-control" id="password" required>
+            </div>
+            <button type="submit" class="btn-login">Ingresar al Sistema</button>
+        </form>
+    </div>
+
+    <script>
+        async function iniciarSesion(e) {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const alerta = document.getElementById('alertaError');
+            const btn = document.querySelector('.btn-login');
+            
+            btn.disabled = true;
+            btn.textContent = 'Verificando...';
+
+            try {
+                const res = await fetch('/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username, password})
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok) {
+                    window.location.href = '/'; // Redirigir a la caja o inicio
+                } else {
+                    alerta.textContent = data.error || 'Credenciales incorrectas';
+                    alerta.style.display = 'block';
+                    btn.disabled = false;
+                    btn.textContent = 'Ingresar al Sistema';
+                }
+            } catch (error) {
+                alerta.textContent = 'Error de conexión con el servidor.';
+                alerta.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = 'Ingresar al Sistema';
+            }
+        }
+    </script>
+</body>
+</html>

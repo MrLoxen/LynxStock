@@ -1,0 +1,174 @@
+:root {
+    --sidebar-width: 250px;
+    --sidebar-collapsed-width: 70px;
+}
+
+body {
+    display: flex;
+    min-height: 100vh;
+    margin: 0;
+    font-family: 'Segoe UI', sans-serif;
+    background-color: #f4f6f9;
+}
+
+/* ---------- Sidebar (sticky, integrado en el flujo) ---------- */
+.sidebar {
+    width: var(--sidebar-width);
+    min-height: 100vh;
+    background-color: #1e1e2f;
+    color: #fff;
+    transition: width 0.3s ease;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    /* necesario para sticky con flex */
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    flex-shrink: 0;
+}
+
+.sidebar.collapsed {
+    width: var(--sidebar-collapsed-width);
+}
+
+.sidebar-header {
+    padding: 1.2rem 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+}
+
+.sidebar-header img {
+    height: 36px;
+    margin-right: 10px;
+}
+
+.sidebar-header .brand-text {
+    font-weight: 600;
+    font-size: 1.3rem;
+    transition: opacity 0.2s;
+}
+
+.sidebar.collapsed .brand-text,
+.sidebar.collapsed .nav-text,
+.sidebar.collapsed .sidebar-footer .btn-text {
+    display: none;
+}
+
+.sidebar-nav {
+    flex: 1;
+    padding: 1rem 0;
+    overflow-y: auto;
+}
+
+.sidebar-nav .nav-link {
+    color: rgba(255, 255, 255, 0.8);
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 0.2s, color 0.2s;
+    border-radius: 0 20px 20px 0;
+    margin-right: 10px;
+    margin-bottom: 2px;
+}
+
+.sidebar-nav .nav-link:hover,
+.sidebar-nav .nav-link.active {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.sidebar-nav .nav-link span:first-child {
+    font-size: 1.3rem;
+    width: 30px;
+    text-align: center;
+}
+
+.sidebar-footer {
+    padding: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.sidebar-divider {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    margin: 0.5rem 1rem;
+}
+
+.btn-collapse {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: #fff;
+    padding: 0.4rem;
+    border-radius: 50%;
+    width: 35px;
+    height: 35px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+    align-self: flex-start;
+}
+
+.btn-collapse:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* ---------- Contenido principal ---------- */
+.main-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.content-area {
+    padding: 1.5rem;
+    flex: 1;
+}
+
+/* ---------- Badge de stock bajo ---------- */
+.badge-danger-custom {
+    background: #dc3545;
+    color: #fff;
+    border-radius: 10px;
+    padding: 0.2em 0.6em;
+    font-size: 0.7rem;
+    margin-left: 5px;
+}
+
+/* ---------- Botón de cierre flotante ---------- */
+.btn-cerrar {
+    position: fixed;
+    bottom: 15px;
+    right: 25px;
+    z-index: 9999;
+    font-size: 1.5rem;
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.btn-cerrar:hover {
+    background-color: rgba(220, 53, 69, 0.9);
+}
+
+/* ---------- Modal genérico ---------- */
+#modalMensaje .modal-content {
+    border-radius: 10px;
+}

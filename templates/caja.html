@@ -1,0 +1,333 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Punto de Venta</h2>
+<p id="tasaInfo" class="text-muted"></p>
+<div class="row">
+    <div class="col-md-8">
+        <div class="mb-3 position-relative">
+            <label class="form-label">Buscar producto (código o descripción)</label>
+            <input type="text" class="form-control" id="buscarProducto" placeholder="Escriba para buscar..." autocomplete="off"
+                   onkeyup="buscarSugerencias()" onkeydown="manejarTecla(event)">
+            <div id="sugerencias" class="list-group position-absolute w-100"
+                 style="max-height: 200px; overflow-y: auto; z-index: 1000; display: none;"></div>
+        </div>
+        <table class="table table-bordered" id="tablaCarrito">
+            <thead><tr><th>Código</th><th>Descripción</th><th>Cant.</th><th>Precio</th><th>Subtotal</th><th></th></tr></thead>
+            <tbody></tbody>
+        </table>
+        <h4>Total: <span id="totalVenta">0.00</span></h4>
+    </div>
+    <div class="col-md-4">
+        <div class="mb-3">
+            <label class="form-label">Tipo de venta</label>
+            <select class="form-select" id="tipoVenta" onchange="cambiarTipo()">
+                <option value="contado">Contado</option>
+                <option value="credito">Crédito</option>
+            </select>
+        </div>
+        
+        <!-- PANEL DE CLIENTE -->
+        <div id="panelCliente" class="card shadow-sm border-secondary mb-3">
+            <div class="card-header bg-secondary text-white py-2">
+                <h6 class="mb-0">Datos del Cliente (Obligatorio)</h6>
+            </div>
+            <div class="card-body py-2">
+                <div class="mb-2">
+                    <label class="form-label mb-1">Cédula</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control form-control-sm" id="cedulaCliente" placeholder="Buscar cédula">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="buscarCliente()">Buscar</button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="abrirModalNuevoCliente()" title="Registrar nuevo cliente">+</button>
+                    </div>
+                    <div id="datosCliente" class="mt-1" style="font-size: 0.9rem;"></div>
+                </div>
+                
+                <div class="mb-2" id="divVencimiento" style="display: none;">
+                    <label class="form-label mb-1 text-danger fw-bold">Fecha de vencimiento</label>
+                    <input type="date" class="form-control form-control-sm border-danger" id="fechaVencimiento">
+                </div>
+            </div>
+        </div>
+        
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-danger btn-lg w-50" onclick="limpiarCaja()">Limpiar / Cancelar</button>
+            <button id="btnCobrar" class="btn btn-success btn-lg w-50" onclick="cobrar()">Cobrar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Rápido para Nuevo Cliente -->
+<div class="modal fade" id="modalNuevoClienteCaja" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">Nuevo Cliente</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2"><label>Nombre completo <span class="text-danger">*</span></label><input type="text" class="form-control form-control-sm" id="nuevoCliNombre"></div>
+                <div class="mb-2"><label>Cédula / RIF <span class="text-danger">*</span></label><input type="text" class="form-control form-control-sm" id="nuevoCliCedula"></div>
+                <div class="mb-2"><label>Teléfono <span class="text-danger">*</span></label><input type="text" class="form-control form-control-sm" id="nuevoCliTelefono" required></div>
+                <div class="mb-2"><label>Dirección Fiscal <span class="text-danger">*</span></label><textarea class="form-control form-control-sm" id="nuevoCliDireccion" rows="2" placeholder="Ej: Av. Principal, Local 4..." required></textarea></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-sm btn-primary" onclick="guardarClienteRapido()">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let carrito = [];
+    let clienteId = null;
+    let tasaActual = 1;
+
+    async function cargarTasa() {
+        const res = await fetch('/api/tasa-bcv');
+        const data = await res.json();
+        if (data.tasa) {
+            tasaActual = data.tasa;
+            document.getElementById('tasaInfo').textContent = `Tasa BCV: ${data.tasa.toFixed(2)} Bs/USD`;
+        } else {
+            document.getElementById('tasaInfo').textContent = 'Tasa no disponible';
+        }
+    }
+    cargarTasa();
+
+    let timeoutBusqueda = null;
+    async function buscarSugerencias() {
+        clearTimeout(timeoutBusqueda);
+        let q = document.getElementById('buscarProducto').value.trim();
+        if (!q) {
+            document.getElementById('sugerencias').style.display = 'none';
+            return;
+        }
+        timeoutBusqueda = setTimeout(async () => {
+            const res = await fetch(`/api/productos/buscar?q=${encodeURIComponent(q)}`);
+            const productos = await res.json();
+            mostrarSugerencias(productos);
+        }, 300);
+    }
+
+    function mostrarSugerencias(productos) {
+        const div = document.getElementById('sugerencias');
+        if (productos.length === 0) {
+            div.style.display = 'none';
+            return;
+        }
+        let html = '';
+        productos.forEach(p => {
+            html += `<a href="#" class="list-group-item list-group-item-action" 
+                        onclick="seleccionarProducto(${p.id}, '${p.codigo}', '${p.descripcion.replace(/'/g, "\\'")}', ${p.precio}); return false;">
+                        ${p.codigo} - ${p.descripcion} (Stock: ${p.stock})</a>`;
+        });
+        div.innerHTML = html;
+        div.style.display = 'block';
+    }
+
+    function seleccionarProducto(id, codigo, descripcion, precio) {
+        let existente = carrito.find(item => item.id === id);
+        if (existente) {
+            existente.cantidad += 1;
+        } else {
+            carrito.push({id: id, codigo: codigo, descripcion: descripcion, precio: precio, cantidad: 1});
+        }
+        document.getElementById('buscarProducto').value = '';
+        document.getElementById('sugerencias').style.display = 'none';
+        renderizarCarrito();
+    }
+
+    function manejarTecla(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const sugerenciasDiv = document.getElementById('sugerencias');
+            if (sugerenciasDiv.style.display === 'block') {
+                const primerLink = sugerenciasDiv.querySelector('a');
+                if (primerLink) primerLink.click();
+                return;
+            }
+            let texto = document.getElementById('buscarProducto').value.trim();
+            if (texto) {
+                fetch(`/api/productos/buscar?q=${encodeURIComponent(texto)}`)
+                .then(res => res.json())
+                .then(productos => {
+                    if (productos.length === 1) {
+                        seleccionarProducto(productos[0].id, productos[0].codigo, productos[0].descripcion, productos[0].precio);
+                    } else if (productos.length > 1) {
+                        mostrarSugerencias(productos);
+                    } else {
+                        mostrarAlerta('Producto no encontrado', 'warning');
+                    }
+                });
+            }
+        }
+        if (e.key === 'Escape') {
+            document.getElementById('sugerencias').style.display = 'none';
+        }
+    }
+
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('#buscarProducto') && !e.target.closest('#sugerencias')) {
+            const sug = document.getElementById('sugerencias');
+            if(sug) sug.style.display = 'none';
+        }
+    });
+
+    function renderizarCarrito() {
+        let tbody = document.querySelector('#tablaCarrito tbody');
+        tbody.innerHTML = '';
+        let totalUSD = 0;
+        carrito.forEach((item, index) => {
+            let subtotalUSD = item.cantidad * item.precio;
+            totalUSD += subtotalUSD;
+            tbody.innerHTML += `<tr>
+                <td>${item.codigo}</td><td>${item.descripcion}</td>
+                <td><input type="number" value="${item.cantidad}" min="1" onchange="cambiarCantidad(${index}, this.value)" style="width: 60px;"></td>
+                <td>$${item.precio.toFixed(2)}</td>
+                <td>Bs.${(subtotalUSD * tasaActual).toFixed(2)}</td>
+                <td><button class="btn btn-sm btn-danger" onclick="eliminarItem(${index})">X</button></td>
+            </tr>`;
+        });
+        document.getElementById('totalVenta').innerHTML = `Total: $${totalUSD.toFixed(2)} USD / Bs.${(totalUSD * tasaActual).toFixed(2)}`;
+    }
+
+    function cambiarCantidad(index, valor) {
+        let nuevaCant = parseInt(valor);
+        if(nuevaCant > 0) {
+            carrito[index].cantidad = nuevaCant;
+        }
+        renderizarCarrito();
+    }
+
+    function eliminarItem(index) {
+        carrito.splice(index, 1);
+        renderizarCarrito();
+    }
+
+    function cambiarTipo() {
+        let tipo = document.getElementById('tipoVenta').value;
+        document.getElementById('divVencimiento').style.display = tipo === 'credito' ? 'block' : 'none';
+    }
+
+    function limpiarCaja() {
+        carrito = [];
+        clienteId = null;
+        document.getElementById('buscarProducto').value = '';
+        document.getElementById('cedulaCliente').value = '';
+        document.getElementById('fechaVencimiento').value = '';
+        document.getElementById('datosCliente').innerHTML = '';
+        document.getElementById('tipoVenta').value = 'contado';
+        cambiarTipo(); 
+        renderizarCarrito();
+    }
+
+    async function buscarCliente() {
+        let cedula = document.getElementById('cedulaCliente').value.trim();
+        if(!cedula) return;
+        let res = await fetch('/api/clientes');
+        let clientes = await res.json();
+        let cli = clientes.find(c => c.cedula === cedula);
+        let div = document.getElementById('datosCliente');
+        if (cli) {
+            clienteId = cli.id;
+            let dir = cli.direccion ? `<br><small class="text-muted">Dir: ${cli.direccion}</small>` : '';
+            div.innerHTML = `<span class="text-success fw-bold">${cli.nombre}</span>${dir}<br><span class="text-muted">Saldo pendiente: Bs.${cli.saldo_pendiente.toFixed(2)}</span>`;
+        } else {
+            clienteId = null;
+            div.innerHTML = '<span class="text-danger">No encontrado. Regístrelo en el botón [+].</span>';
+        }
+    }
+
+    const modalCliCaja = new bootstrap.Modal(document.getElementById('modalNuevoClienteCaja'));
+    
+    function abrirModalNuevoCliente() {
+        let cedulaActual = document.getElementById('cedulaCliente').value.trim();
+        document.getElementById('nuevoCliCedula').value = cedulaActual;
+        document.getElementById('nuevoCliNombre').value = '';
+        document.getElementById('nuevoCliTelefono').value = '';
+        document.getElementById('nuevoCliDireccion').value = '';
+        modalCliCaja.show();
+    }
+
+    async function guardarClienteRapido() {
+        const data = {
+            nombre: document.getElementById('nuevoCliNombre').value.trim(),
+            cedula: document.getElementById('nuevoCliCedula').value.trim(),
+            telefono: document.getElementById('nuevoCliTelefono').value.trim(),
+            direccion: document.getElementById('nuevoCliDireccion').value.trim()
+        };
+        
+        if(!data.nombre || !data.cedula || !data.direccion || !data.telefono) {
+            mostrarAlerta('Todos los campos (Nombre, Cédula/RIF, Teléfono y Dirección) son obligatorios.', 'warning');
+            return;
+        }
+        
+        const resp = await fetch('/api/clientes', { 
+            method: 'POST', 
+            headers: {'Content-Type': 'application/json'}, 
+            body: JSON.stringify(data) 
+        });
+        
+        if (resp.ok) {
+            modalCliCaja.hide();
+            document.getElementById('cedulaCliente').value = data.cedula;
+            buscarCliente(); 
+            mostrarAlerta('¡Cliente registrado exitosamente!', 'success');
+        } else {
+            const error = await resp.json();
+            mostrarAlerta(error.error, 'error');
+        }
+    }
+
+    async function cobrar() {
+        if (carrito.length === 0) {
+            mostrarAlerta('Agregue productos al carrito', 'warning');
+            return;
+        }
+        
+        if (!clienteId) {
+            mostrarAlerta('Debe seleccionar o registrar un cliente obligatoriamente para procesar la venta.', 'error');
+            return;
+        }
+
+        let tipo = document.getElementById('tipoVenta').value;
+        let dataVenta = {
+            tipo: tipo,
+            productos: carrito.map(item => ({id: item.id, cantidad: item.cantidad})),
+            cliente_id: clienteId,
+            fecha_vencimiento: null
+        };
+        
+        if (tipo === 'credito') {
+            dataVenta.fecha_vencimiento = document.getElementById('fechaVencimiento').value || null;
+        }
+        
+        const btnCobrar = document.getElementById('btnCobrar');
+        btnCobrar.disabled = true;
+        btnCobrar.textContent = 'Procesando...';
+
+        try {
+            let resp = await fetch('/api/ventas', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(dataVenta)
+            });
+            let resultado = await resp.json();
+            if (resp.ok) {
+                mostrarAlerta(`Venta registrada exitosamente.\nTotal: $${resultado.total_usd.toFixed(2)} USD / Bs.${resultado.total_bs.toFixed(2)}`, 'success');
+                limpiarCaja();
+            } else {
+                mostrarAlerta('Error: ' + resultado.error, 'error');
+            }
+        } catch (e) {
+            mostrarAlerta('Error de conexión al cobrar', 'error');
+        } finally {
+            btnCobrar.disabled = false;
+            btnCobrar.textContent = 'Cobrar';
+        }
+    }
+</script>
+{% endblock %}
