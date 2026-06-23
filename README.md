@@ -23,7 +23,7 @@ Copia y pega este bloque completo en tu terminal de Windows (PowerShell) para de
 
 ```bash
 # 1. Clonar el repositorio y entrar a la carpeta del proyecto
-git clone [https://github.com/TU_USUARIO/LynxStock.git](https://github.com/TU_USUARIO/LynxStock.git)
+git clone https://github.com/MrLoxen/LynxStock.git
 cd LynxStock
 
 # 2. Crear y activar el entorno virtual
