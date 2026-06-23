@@ -37,6 +37,14 @@ pip install -r requirements.txt
 python app.py
 
 ```
+* **🔑 5. Creación del Primer Usuario (Administrador)**
+Como la base de datos se crea vacía por seguridad, la primera vez que inicies el servidor deberás crear el usuario principal.
+
+Nota: La dirección exacta puede variar según tu computadora. Fíjate en tu terminal al ejecutar el Paso 4, debería decir algo como * Running on http://127.0.0.1:5050.
+
+Copia esa dirección base que te da la terminal, pégala en tu navegador y añádele /crear-admin-secreto al final:
+👉 Ejemplo: http://127.0.0.1:5050/crear-admin-secreto
+
 ## 📝 Historial de Cambios (Changelog)
 
 v1.1.0 - Autenticación, Auditoría y Seguridad (Actual)
