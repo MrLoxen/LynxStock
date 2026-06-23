@@ -35,3 +35,27 @@ pip install -r requirements.txt
 
 # 4. Arrancar el servidor de la aplicación
 python app.py
+
+📝 Historial de Cambios (Changelog)
+
+v1.1.0 - Autenticación, Auditoría y Seguridad (Actual)
+
+Módulo de Usuarios: Implementación de registro, inicio de sesión seguro, gestión de contraseñas encriptadas y validación de roles (@role_required).
+
+Seguridad y Auditoría: Integración de bitácora automática e inmutable. Registra eventos de Login/Logout, transacciones de Ventas en Caja, y operaciones CRUD (Crear, Editar, Eliminar) en módulos de Clientes, Proveedores e Inventario.
+
+Protección de Datos: Incorporación de archivo .gitignore para prevenir la subida accidental de la base de datos local y credenciales del entorno virtual a GitHub.
+
+Mantenimiento: Generación de lista estructurada de dependencias (requirements.txt) para facilitar el despliegue en nuevos entornos.
+
+Corrección de Errores (Bugfixes): Resolución de conflictos lógicos (or vs ||) entre Python y JS, corrección de alcance de variables en rutas de la API, y estabilización del sistema de guardado.
+
+v1.0.0 - Lanzamiento del Sistema Base (MVP)
+
+Core del Sistema: Creación de la arquitectura base con Flask y SQLAlchemy.
+
+Módulos de Gestión: Creación de las vistas y base de datos relacional para Inventario, Clientes y Proveedores.
+
+Módulo de Caja y Devoluciones: Lógica transaccional para calcular totales, registrar pagos completos/parciales y revertir operaciones de manera segura.
+
+Interfaz de Usuario: Diseño de panel lateral colapsable y tablas dinámicas utilizando Bootstrap 5.
